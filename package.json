@@ -1,0 +1,31 @@
+{
+  "name": "beeb",
+  "version": "1.0.0",
+  "description": "",
+  "main": "start.js",
+  "dependencies": {
+    "node-persist": "^2.1.0",
+    "tmi.js": "^1.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^8.0.31",
+    "nodemon": "^1.12.1",
+    "ts-node": "^3.3.0",
+    "typescript": "^2.5.3"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "npm run build:live",
+    "build:live": "nodemon --exec ./node_modules/.bin/ts-node -- ./start.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/programmingpeeps/beeb.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/programmingpeeps/beeb/issues"
+  },
+  "homepage": "https://github.com/programmingpeeps/beeb#readme"
+}
