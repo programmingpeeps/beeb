@@ -8,15 +8,31 @@
     "tmi.js": "^1.2.1"
   },
   "devDependencies": {
+    "@types/jest": "^21.1.2",
     "@types/node": "^8.0.31",
+    "jest": "^21.2.1",
     "nodemon": "^1.12.1",
+    "ts-jest": "^21.0.1",
     "ts-node": "^3.3.0",
     "typescript": "^2.5.3"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "start": "npm run build:live",
     "build:live": "nodemon --exec ./node_modules/.bin/ts-node -- ./start.ts"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js"
+    ],
+    "transform": {
+      "^.+\\.(ts|tsx)$": "<rootDir>/preprocessor.js"
+    },
+    "testMatch": [
+      "**/__tests__/*.(ts|tsx|js)"
+    ]
   },
   "repository": {
     "type": "git",

@@ -73,13 +73,24 @@ storage.init().then(function () {
 
         if (message.startsWith("!start")) {
             if (game) {
-              if (!game.inProgress()) {
-                game = new mafia.Game(userstate.username, client, channel);
-              } else {
-                runAndTellThat(`Sorry ${userstate.username}, we already have a game going!`)
-              }
+              runAndTellThat(`Sorry ${userstate.username}, we already have a game going! Type !join to join.`)
             } else {
               game = new mafia.Game(userstate.username, client, channel);
+            }
+        }
+
+        if (message.startsWith("!join")) {
+            if (game) {
+              game.userJoined(userstate.username);
+            } else {
+              runAndTellThat(`Sorry ${userstate.username}, there's no game going yet. Type !start to start one.`)
+            }
+        }
+
+        if (message.startsWith("!end")) {
+            if (game.initiator == userstate.username) {
+                game = null;
+                runAndTellThat("The game is over!");
             }
         }
             
