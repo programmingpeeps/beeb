@@ -1,5 +1,6 @@
 var tmi = require("tmi.js");
 var storage = require('node-persist');
+var mafia = require('./mafia');
 
 var options = {
     options: {
@@ -42,12 +43,14 @@ function voteAnnouncement(votes: Object) {
     return s.join(',');
 }
 
-var choices = ["big timer bot", "Paintball Buy/Sell/Trade", "Bitcoin miner", "chat game"];
+var choices = ["mafia chat bot", "Paintball Buy/Sell/Trade", "Bitcoin miner"];
 var votes: Map<string, number> = new Map<string, number>()
-for (var choice in choices) {
+for (var choice of choices) {
     votes.set(choice, 0);
 }
 var voted: Array<string> = [];
+
+var game = null;
 
 storage.init().then(function () {
     console.log('storage is init');
@@ -56,45 +59,54 @@ storage.init().then(function () {
     if (storedVotes) votes = storedVotes;
     if (storedVoted) voted = storedVoted;
     
-    client.on("join", function (channel, username, self) {
-        if (self) return; // don't announce ourselves
-        if (username == "programmingpeople") return; // don't announce the automod
-
-        client.say("#programmingpeople", `what is up ${username}? You need to !roll playa`)
-    });
-
     client.on("message", function (channel, userstate, message, self) {
         if (self) return;
 
-        if (message.startsWith("!roll")) {
+        if (message.startsWith("!vote"))
+            return handleVote(message, userstate);
+
+        if (message.startsWith("!choices"))
+            return runAndTellThat("1: mafia chat bot, 2: Paintball Buy/Sell/Trade, 3: Bitcoin miner");
+
+        if (message.startsWith("!roll"))
             client.say("#programmingpeople", `You rolled a ${getYourFate()}!`);
-        }
-        if (message.startsWith("!vote")) {
-            const name = userstate.username;
-            console.log(voted);
-            console.log(votes);
-            if ((voted as any).find(x => x == name)) {
-                console.log("Found this playa");
-                return;
+
+        if (message.startsWith("!start")) {
+            if (game) {
+              if (!game.inProgress()) {
+                game = new mafia.Game(userstate.username, client, channel);
+              } else {
+                runAndTellThat(`Sorry ${userstate.username}, we already have a game going!`)
+              }
+            } else {
+              game = new mafia.Game(userstate.username, client, channel);
             }
-            const re = /!vote (\d+)/;
-            const match = message.match(re);
-            if (!match) return;
-            const realDealMatch = message.match(re)[1];
-            const choice = parseInt(realDealMatch, 10);
-            // Is this a valid choice
-            if (!choices[choice - 1]) return;
-            // Push the username to voted so they can't vote again
-            voted.push(name);
-            votes[choices[choice - 1]] = votes[choices[choice - 1]] + 1;
-            // Save to localStorage
-            storage.setItem('votes', votes);
-            storage.setItem('voted', voted);
-            runAndTellThat(`${name} voted, ${voteAnnouncement(votes)}`);
-            console.log(votes);
         }
-        if (message.startsWith("!choices")) {
-            runAndTellThat("1: big timer bot, 2: Paintball Buy/Sell/Trade, 3: Bitcoin miner, 4: chat game");
-        }
+            
     });
 })
+
+function handleVote(message, userstate) {
+    const name = userstate.username;
+    console.log("voted: " + voted);
+    console.log("votes: " + votes);
+    if ((voted as any).find(x => x == name)) {
+        console.log("Found this playa");
+        return;
+    }
+    const re = /!vote (\d+)/;
+    const match = message.match(re);
+    if (!match) return;
+    const realDealMatch = message.match(re)[1];
+    const choice = parseInt(realDealMatch, 10);
+    // Is this a valid choice
+    if (!choices[choice - 1]) return;
+    // Push the username to voted so they can't vote again
+    voted.push(name);
+    votes[choices[choice - 1]] = votes[choices[choice - 1]] + 1;
+    // Save to localStorage
+    storage.setItem('votes', votes);
+    storage.setItem('voted', voted);
+    runAndTellThat(`${name} voted, ${voteAnnouncement(votes)}`);
+    console.log(votes);
+}
