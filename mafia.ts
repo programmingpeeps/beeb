@@ -3,13 +3,37 @@
 // lfp - Looking for players. Game has just been started.
 // day - We're waiting for people to vote to kill a mobster
 // night - We're waiting for mobsters to kill people
-const enum GameState {
+export const enum GameState {
     LookingForPlayers,
     DayTime,
-    NightTime
+    NightTime,
+    LawAndOrder
 }
 
-const lookingForPlayersWindow = 10; // in seconds
+export const lookingForPlayersWindow = 10000; // in milliseconds
+const minPlayers = 5;
+
+class Event { }
+
+export class ChatEvent extends Event {
+    username: string;
+    message: string;
+
+    constructor(username: string, message: string) {
+        super();
+        this.username = username;
+        this.message = message;
+    }
+}
+
+export class TimeEvent extends Event {
+    msElapsed: number;
+
+    constructor(msElapsed: number) {
+        super();
+        this.msElapsed = msElapsed;
+    }
+}
 
 export class Game {
     players: Array<string>;
@@ -17,6 +41,7 @@ export class Game {
     channel: string;
     state: GameState;
     initiator: string;
+    votes: Map<string,Array<string>>;
 
     constructor(initiator: string, chatClient: any, channel: string) {
         this.initiator = initiator;
@@ -29,32 +54,103 @@ export class Game {
     reportPlayers() {
         this.chatClient.say(this.channel, `Current players: ${this.players.join(', ')}`)
     }
-
-    userJoined(username: string) {
-        if (!this.players.includes(username)) {
-          this.players.push(username);
+    voteTally() {
+        let voteTally = new Map<string, number>();
+        for (var username in this.votes) {
+            let votedFor = this.votes[username];
+            if (!voteTally[votedFor])
+                voteTally[votedFor] = 1;
+            else
+                voteTally[votedFor]++;
         }
-        this.reportPlayers();
+
+        return voteTally;
+    }
+
+    reportVotes() {
+        let votePairStrings = [];
+        let tally = this.voteTally();
+        for (var username in tally) {
+            let voteCount = tally[username];
+            votePairStrings.push(`${username}: ${voteCount}`);
+        }
+        this.chatClient.say(this.channel, votePairStrings.join(', '));
+    }
+
+    react(event: Event) {
+        if (event instanceof TimeEvent) {
+            let timeEvent = event as TimeEvent;
+            if (timeEvent.msElapsed == lookingForPlayersWindow) {
+                this.transition(GameState.DayTime);
+            }
+        } else if (event instanceof ChatEvent) {
+            let chatEvent = event as ChatEvent;
+            this.handleChat(chatEvent.username, chatEvent.message);
+        }
+    }
+
+    handleChat(username: string, message: string) {
+        let messageParts = message.split(" ");
+        let command = messageParts[0];
+        switch (command) {
+            case "!vote":
+                let votingFor = messageParts[1];
+                this.handleVote(username, votingFor);
+                break;
+            case "!join":
+                if (!this.players.includes(username)) {
+                    this.players.push(username);
+                }
+                this.reportPlayers();
+                break;
+        }
+    }
+
+    handleVote(username, votingFor) {
+        if (username == votingFor) {
+            this.chatClient.say(this.channel, "You can't vote for yourself!")
+            return;
+        }
+        this.votes[username] = votingFor;
+
+        if (Object.keys(this.votes).length == this.players.length) {
+            this.transition(GameState.LawAndOrder);
+        }
+        this.reportVotes();
     }
 
     lookingForPlayersStarted() {
-        setTimeout(() => this.transition(GameState.NightTime), lookingForPlayersWindow * 1000);
         this.chatClient.say(this.channel, "The game has started. Type !join to join the game.")
         this.reportPlayers();
     }
 
     dayTimeStarted() {
+        this.votes = new Map<string, Array<string>>();
         // TODO: Assign roles randomly.
-        this.chatClient.say(this.channel, "Day time has started.")
-    }
-
-    nightTimeStarted() {
-        if (this.players.length < 4) {
-          this.chatClient.say(this.channel, "We need at least 4 people for a game. Sorry, this game is now cancelled!");
+        if (this.players.length < minPlayers) {
+          this.chatClient.say(this.channel, "Not enough players to start a game. Must be at least 5!");
           return;
         }
 
+        this.chatClient.say(this.channel, "It's daytime. The evil Kappa s are among you, figure out who you think they are, and type !vote <username> to vote to knock 'em out.")
+    }
+
+    nightTimeStarted() {
         this.chatClient.say(this.channel, "Night time has started.")
+    }
+
+    lawAndOrderStarted() {
+        let tally = this.voteTally();
+        let mostVotes = 0;
+        let mostVotesUsername = "";
+        for (var username in tally) {
+            if (tally[username] > mostVotes) {
+                mostVotes = tally[username];
+                mostVotesUsername = username;
+            }
+        }
+        // TODO: We didn't remove them from the game
+        this.chatClient.say(this.channel, `${mostVotesUsername} is dead, may he sheep in peace.`)
     }
 
     transition(state: GameState) {
@@ -68,6 +164,9 @@ export class Game {
                 break;
             case GameState.NightTime:
                 this.nightTimeStarted();
+                break;
+            case GameState.LawAndOrder:
+                this.lawAndOrderStarted();
                 break;
         }
     }
