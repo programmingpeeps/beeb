@@ -1,32 +1,82 @@
-export class PlayerStateManager {
-    players: Array<string>;
-    deadPlayers: Array<string>;
+export const enum PlayerRole {
+    Mafia,
+    Sheep
+}
+
+class Player {
+    user: string;
+    alive: boolean;
+    role: PlayerRole;
+    strawLength: number;
+
+    constructor(user: string, role?: PlayerRole) {
+        this.user = user;
+        this.alive = true;
+        if (role) this.role = role;
+    }
+
+    kill() {
+        this.alive = false;
+    }
+}
+
+export default class PlayerStateManager {
+    players: Array<Player>;
 
     constructor() {
         this.players = [];
-        this.deadPlayers = [];
     }
 
     join(user: string) : boolean {
         if (this.hasPlayer(user)) return false;
-        this.players.push(user);
+        this.players.push(new Player(user));
         return true;
     }
 
-    hasPlayer(user: string) : boolean {
-        return this.players.includes(user);
+    hasPlayer(user: string, alive?: boolean) : boolean {
+        if (!alive) alive = true;
+        return this.players
+                .find(u => u.user == user && u.alive == alive) != undefined;
+    }
+
+    setPlayers(playas: Map<string, PlayerRole>) {
+        playas.forEach((role: PlayerRole, name: string) => {
+            this.players.push(new Player(name, role));
+        });
+    }
+
+    getPlayers() {
+        return this.players.map(p => p.user);
+    }
+
+    getMafiosos() {
+        return this.getPlayersByRole(PlayerRole.Mafia);
+    }
+
+    getSheeple() {
+        return this.getPlayersByRole(PlayerRole.Sheep);
+    }
+
+    getPlayersByRole(role: PlayerRole) {
+        return this.players.filter(u => u.role == role);
     }
 
     kill(user: string) : boolean {
         if (!this.hasPlayer(user)) return false;
-        this.players = this.players.filter(p => p !== user);
-        this.deadPlayers.push(user);
+        const playerToKill = this.players.find(p => p.user == user);
+        playerToKill.kill();
         return true;
     }
 
-    playersAlive(playerType) {
-        //this.players[playerType].length;
-    }
+    assignRoles() {
+        if (this.players[0].role == undefined) return;
 
+        this.players.forEach(
+            p => p.strawLength = Math.floor(Math.random() * 100) + 1);
+        this.players.sort((a, b) => b.strawLength - a.strawLength);
+        this.players.forEach(p => p.role = PlayerRole.Sheep);
+        this.players[0].role = PlayerRole.Mafia;
+        this.players[1].role = PlayerRole.Mafia;
+    }
 }
     

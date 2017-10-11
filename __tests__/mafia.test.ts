@@ -1,4 +1,5 @@
 import { Game, GameState, ChatEvent, TimeEvent } from '../mafia';
+import PlayerStateManager, { PlayerRole } from "../playerstatemanager";
 
 // TODO: move to nighttime 
 // and let the killers know they should vote to kill
@@ -24,16 +25,25 @@ class FakeChatClient {
 class GameTestHelper {
     chatClient: FakeChatClient;
     game: Game;
-    defaultPlayers: Array<string> = ['alex', 'ogtega', 'galacticRaven', 'ian025'];
+    playerStateManager: PlayerStateManager;
+    defaultPlayers: Map<string, PlayerRole> = new Map([
+        ['alex', PlayerRole.Mafia], 
+        ['jon', PlayerRole.Mafia],
+        ['ogtega', PlayerRole.Sheep],
+        ['galacticRaven', PlayerRole.Sheep],
+        ['ian025', PlayerRole.Sheep]
+    ]);
 
     constructor() {
         this.chatClient = new FakeChatClient();
-        this.game = new Game("jon", this.chatClient, "#programmingpeople");
+        this.playerStateManager = new PlayerStateManager();
+        this.game = new Game("jon", this.chatClient, "#programmingpeople", this.playerStateManager);
     }
 
     joinPlayers(players?: Array<string>) : GameTestHelper {
         if (!players) {
-            players = this.defaultPlayers;
+            this.playerStateManager.setPlayers(this.defaultPlayers);
+            return this;
         }
 
         players.forEach(player => {
@@ -149,7 +159,7 @@ it('get whispered with your role after game start', () => {
         .expectWhisper('galacticRaven', 'You are a sheeple.')
         .expectWhisper('ian025', 'You are a sheeple.')
         .expectWhisper('ogtega', 'You are a sheeple.');
-})
+});
 
 // TODO: Assign roles after game start
 // TODO: Everyone gets whispered with their role after game start

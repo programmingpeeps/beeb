@@ -1,5 +1,5 @@
 // Game is a mafia game
-import { PlayerStateManager } from "./playerstatemanager";
+import PlayerStateManager from "./playerstatemanager";
 
 // lfp - Looking for players. Game has just been started.
 // day - We're waiting for people to vote to kill a mobster
@@ -44,9 +44,9 @@ export class Game {
     initiator: string;
     votes: Map<string,Array<string>>;
 
-    constructor(initiator: string, chatClient: any, channel: string) {
+    constructor(initiator: string, chatClient: any, channel: string, manager?: PlayerStateManager) {
         this.initiator = initiator;
-        this.playerStateManager = new PlayerStateManager();
+        this.playerStateManager = manager || new PlayerStateManager();
         this.playerStateManager.join(initiator);
         this.chatClient = chatClient;
         this.channel = channel;
@@ -54,7 +54,7 @@ export class Game {
     }
 
     players() : Array<string> {
-        return this.playerStateManager.players;
+        return this.playerStateManager.getPlayers();
     }
 
     reportPlayers() {
@@ -136,6 +136,8 @@ export class Game {
           this.chatClient.say(this.channel, "Not enough players to start a game. Must be at least 5!");
           return;
         }
+
+        this.playerStateManager.assignRoles();
 
         this.chatClient.say(this.channel, "It's daytime. The evil Kappa s are among you, figure out who you think they are, and type !vote <username> to vote to knock 'em out.")
     }
