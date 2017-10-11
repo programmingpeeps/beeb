@@ -1,4 +1,5 @@
 // Game is a mafia game
+import { PlayerStateManager } from "./playerstatemanager";
 
 // lfp - Looking for players. Game has just been started.
 // day - We're waiting for people to vote to kill a mobster
@@ -36,7 +37,7 @@ export class TimeEvent extends Event {
 }
 
 export class Game {
-    players: Array<string>;
+    playerStateManager: PlayerStateManager;
     chatClient: any;
     channel: string;
     state: GameState;
@@ -45,14 +46,19 @@ export class Game {
 
     constructor(initiator: string, chatClient: any, channel: string) {
         this.initiator = initiator;
-        this.players = [initiator];
+        this.playerStateManager = new PlayerStateManager();
+        this.playerStateManager.join(initiator);
         this.chatClient = chatClient;
         this.channel = channel;
         this.transition(GameState.LookingForPlayers);
     }
 
+    players() : Array<string> {
+        return this.playerStateManager.players;
+    }
+
     reportPlayers() {
-        this.chatClient.say(this.channel, `Current players: ${this.players.join(', ')}`)
+        this.chatClient.say(this.channel, `Current players: ${this.players().join(', ')}`)
     }
     voteTally() {
         let voteTally = new Map<string, number>();
@@ -98,8 +104,8 @@ export class Game {
                 this.handleVote(username, votingFor);
                 break;
             case "!join":
-                if (!this.players.includes(username)) {
-                    this.players.push(username);
+                if (!this.playerStateManager.hasPlayer(username)) {
+                    this.playerStateManager.join(username);
                 }
                 this.reportPlayers();
                 break;
@@ -113,7 +119,7 @@ export class Game {
         }
         this.votes[username] = votingFor;
 
-        if (Object.keys(this.votes).length == this.players.length) {
+        if (Object.keys(this.votes).length == this.players().length) {
             this.transition(GameState.LawAndOrder);
         }
         this.reportVotes();
@@ -126,8 +132,7 @@ export class Game {
 
     dayTimeStarted() {
         this.votes = new Map<string, Array<string>>();
-        // TODO: Assign roles randomly.
-        if (this.players.length < minPlayers) {
+        if (this.players().length < minPlayers) {
           this.chatClient.say(this.channel, "Not enough players to start a game. Must be at least 5!");
           return;
         }
@@ -150,7 +155,7 @@ export class Game {
             }
         }
         // TODO: We didn't remove them from the game
-        this.chatClient.say(this.channel, `${mostVotesUsername} is dead, may he sheep in peace.`)
+        this.chatClient.say(this.channel, `${mostVotesUsername} is dead, may they sheep in peace.`)
     }
 
     transition(state: GameState) {
