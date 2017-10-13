@@ -1,5 +1,5 @@
 // Game is a mafia game
-import PlayerStateManager from "./playerstatemanager";
+import PlayerStateManager, { Player, PlayerRole } from "./playerstatemanager";
 
 // lfp - Looking for players. Game has just been started.
 // day - We're waiting for people to vote to kill a mobster
@@ -17,6 +17,17 @@ const minPlayers = 5;
 class Event { }
 
 export class ChatEvent extends Event {
+    username: string;
+    message: string;
+
+    constructor(username: string, message: string) {
+        super();
+        this.username = username;
+        this.message = message;
+    }
+}
+
+export class WhisperEvent extends Event {
     username: string;
     message: string;
 
@@ -53,13 +64,22 @@ export class Game {
         this.transition(GameState.LookingForPlayers);
     }
 
-    players() : Array<string> {
+    players() : Array<Player> {
         return this.playerStateManager.getPlayers();
     }
 
-    reportPlayers() {
-        this.chatClient.say(this.channel, `Current players: ${this.players().join(', ')}`)
+    playerNames() : Array<string> {
+        return this.players().map(p => p.user);
     }
+
+    alivePlayers() : Array<Player> {
+        return this.players().filter(p => p.alive);
+    }
+
+    reportPlayers() {
+        this.chatClient.say(this.channel, `Current players: ${this.playerNames().join(', ')}`)
+    }
+
     voteTally() {
         let voteTally = new Map<string, number>();
         for (var username in this.votes) {
@@ -92,6 +112,20 @@ export class Game {
         } else if (event instanceof ChatEvent) {
             let chatEvent = event as ChatEvent;
             this.handleChat(chatEvent.username, chatEvent.message);
+        } else if (event instanceof WhisperEvent) {
+            let chatEvent = event as WhisperEvent;
+            this.handleWhisper(chatEvent.username, chatEvent.message);
+        }
+    }
+
+    handleWhisper(username: string, message: string) {
+        let messageParts = message.split(" ");
+        let command = messageParts[0];
+        switch (command) {
+            case "!kill":
+                let killee = messageParts[1];
+                this.handleKill(username, killee);
+                break;
         }
     }
 
@@ -112,14 +146,52 @@ export class Game {
         }
     }
 
+    handleKill(killerUsername, killeeUsername) {
+        // TODO: Shouldn't be killing yourself, but we don't
+        // have a test yet
+        // if (username == killee) {
+        //    this.chatClient.say(this.channel, "You can't vote for yourself!")
+        //    return;
+        // }
+
+        let killee = this.players().find(u => u.user == killeeUsername)
+        if (!killee) {
+            this.chatClient.whisper(killerUsername, "That person is not playing!");
+            return;
+        }
+
+        if (!killee.alive) {
+            this.chatClient.whisper(killerUsername, "You cannot kill dead people.");
+            return;
+        }
+
+        this.playerStateManager.kill(killeeUsername);
+        this.transition(GameState.DayTime);
+    }
+
     handleVote(username, votingFor) {
         if (username == votingFor) {
             this.chatClient.say(this.channel, "You can't vote for yourself!")
             return;
         }
+
+        // if you dead, you can't be votin'
+        let user = this.players().find(u => u.user == username)
+        if (!user) {
+            return;
+        }
+
+        if (!user.alive) {
+            // nah, you can't vote.
+            // don't tell 'em anything because then we'll
+            // spam chat too hard
+            return;
+        }
+
         this.votes[username] = votingFor;
 
-        if (Object.keys(this.votes).length == this.players().length) {
+        let numVotes = Object.keys(this.votes).length;
+        if (numVotes == this.alivePlayers().length) {
             this.transition(GameState.LawAndOrder);
         }
         this.reportVotes();
@@ -138,12 +210,29 @@ export class Game {
         }
 
         this.playerStateManager.assignRoles();
+        // for every player
+        //   send a whisper through the chat client what their role is
+
+        for (let player of this.players()) {
+            let playerRoleName;
+            if (player.role == PlayerRole.Mafia) {
+                playerRoleName = "Mafia";
+            } else {
+                playerRoleName = "Sheeple";
+            }
+            this.chatClient.whisper(player.user, `Hey! Your role is ${playerRoleName}.`);
+        }
 
         this.chatClient.say(this.channel, "It's daytime. The evil Kappa s are among you, figure out who you think they are, and type !vote <username> to vote to knock 'em out.")
     }
 
     nightTimeStarted() {
         this.chatClient.say(this.channel, "Night time has started.")
+        for (let player of this.players()) {
+            if (player.role == PlayerRole.Mafia && player.alive) {
+                this.chatClient.whisper(player.user, "Time to kill. Use !kill <username> to kill someone, you evil mafia person you.");
+            }
+        }
     }
 
     lawAndOrderStarted() {
@@ -156,8 +245,22 @@ export class Game {
                 mostVotesUsername = username;
             }
         }
-        // TODO: We didn't remove them from the game
+
+        this.playerStateManager.kill(mostVotesUsername);
+        this.votes = null;
         this.chatClient.say(this.channel, `${mostVotesUsername} is dead, may they sheep in peace.`)
+
+        if (this.didSheepleWin()) {
+            this.chatClient.say(this.channel, "Sheeple win!");
+            return;
+        }
+
+        this.transition(GameState.NightTime);
+    }
+
+    didSheepleWin() {
+        const mafiosos = this.playerStateManager.getMafiosos();
+        return mafiosos.filter(m => m.alive).length == 0;
     }
 
     transition(state: GameState) {

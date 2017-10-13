@@ -1,9 +1,9 @@
 export const enum PlayerRole {
-    Mafia,
+    Mafia = 1,
     Sheep
 }
 
-class Player {
+export class Player {
     user: string;
     alive: boolean;
     role: PlayerRole;
@@ -40,13 +40,14 @@ export default class PlayerStateManager {
     }
 
     setPlayers(playas: Map<string, PlayerRole>) {
+        this.players = [];
         playas.forEach((role: PlayerRole, name: string) => {
             this.players.push(new Player(name, role));
         });
     }
 
     getPlayers() {
-        return this.players.map(p => p.user);
+        return this.players;
     }
 
     getMafiosos() {
@@ -69,7 +70,8 @@ export default class PlayerStateManager {
     }
 
     assignRoles() {
-        if (this.players[0].role == undefined) return;
+        // If we've already assigned roles, don't do it again.
+        if (this.players[0].role != undefined) return;
 
         this.players.forEach(
             p => p.strawLength = Math.floor(Math.random() * 100) + 1);

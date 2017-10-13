@@ -1,4 +1,4 @@
-import { Game, GameState, ChatEvent, TimeEvent } from '../mafia';
+import { Game, GameState, ChatEvent, WhisperEvent, TimeEvent } from '../mafia';
 import PlayerStateManager, { PlayerRole } from "../playerstatemanager";
 
 // TODO: move to nighttime 
@@ -9,7 +9,7 @@ class FakeChatClient {
     buffer: Map<string, Array<string>>;
 
     constructor() {
-        this.buffer = {};
+        this.buffer = new Map<string, Array<string>>();
     }
 
     say(channel: string, message: string) {
@@ -68,12 +68,22 @@ class GameTestHelper {
         return this;
     }
 
+    kill(killer: string, killee: string) : GameTestHelper {
+        this.game.react(new WhisperEvent(killer, `!kill ${killee}`));
+        return this;
+    }
+
     expectWhisper(user: string, expected: string) : GameTestHelper {
         expect(this.chatClient.buffer[user]).toContain(expected);
         return this;
     }
 
-    testChat(expected: string) : GameTestHelper {
+    expectNotWhisper(user: string, expected: string) : GameTestHelper {
+        expect(this.chatClient.buffer[user]).not.toContain(expected);
+        return this;
+    }
+
+    expectChat(expected: string) : GameTestHelper {
         expect(this.chatClient.buffer[this.game.channel]).toContain(expected);
         return this;
     }
@@ -89,26 +99,26 @@ it('starts with the initiator as a player', () => {
 it('joining adds a player to the game', () => { 
     const gameSetup = new GameTestHelper();
     gameSetup.joinPlayers(['alex', 'ogtega']);
-    gameSetup.testChat("Current players: jon, alex, ogtega");
+    gameSetup.expectChat("Current players: jon, alex, ogtega");
 });
 
 it('does not allow a user to join twice', () => { 
     const gameSetup = new GameTestHelper();
     gameSetup.joinPlayers(['alex', 'alex']);
-    gameSetup.testChat("Current players: jon, alex");
+    gameSetup.expectChat("Current players: jon, alex");
 });
 
 it('fails to start without enough people', () => { 
     const gameSetup = new GameTestHelper();
     gameSetup.joinPlayers(['alex']);
     gameSetup.startGame();
-    gameSetup.testChat("Not enough players to start a game. Must be at least 5!");
+    gameSetup.expectChat("Not enough players to start a game. Must be at least 5!");
 });
 
 it('starts with enough people', () => {
     const gameSetup = new GameTestHelper();
     gameSetup.startWithPlayers();
-    gameSetup.testChat("It's daytime. The evil Kappa s are among you, figure out who you think they are, and type !vote <username> to vote to knock 'em out.");
+    gameSetup.expectChat("It's daytime. The evil Kappa s are among you, figure out who you think they are, and type !vote <username> to vote to knock 'em out.");
 });
 
 it('tallies votes', () => {
@@ -117,7 +127,7 @@ it('tallies votes', () => {
         .startWithPlayers()
         .vote('alex', 'ian025')
         .vote('galacticRaven', 'ian025')
-        .testChat("ian025: 2");
+        .expectChat("ian025: 2");
 });
 
 it('voting twice means the last vote is the one that counts', () => {
@@ -125,9 +135,9 @@ it('voting twice means the last vote is the one that counts', () => {
     gameSetup
         .startWithPlayers()
         .vote('alex', 'ian025')
-        .testChat("ian025: 1")
+        .expectChat("ian025: 1")
         .vote('alex', 'jon')
-        .testChat("jon: 1");
+        .expectChat("jon: 1");
 });
 
 it('cant vote for yourself', () => {
@@ -135,7 +145,7 @@ it('cant vote for yourself', () => {
     gameSetup
         .startWithPlayers()
         .vote('alex', 'alex')
-        .testChat("You can't vote for yourself!");
+        .expectChat("You can't vote for yourself!");
 });
 
 it('somebody dies after everyone has voted', () => {
@@ -147,26 +157,168 @@ it('somebody dies after everyone has voted', () => {
         .vote('ian025', 'alex')
         .vote('ogtega', 'alex')
         .vote('jon', 'alex')
-        .testChat("alex is dead, may they sheep in peace.");
+        .expectChat("alex is dead, may they sheep in peace.");
 });
 
-it('get whispered with your role after game start', () => {
+it('whispers everyone with your role after game start', () => {
     const gameSetup = new GameTestHelper();
     gameSetup
         .startWithPlayers()
-        .expectWhisper('alex', 'You are in the mafia.')
-        .expectWhisper('jon', 'You are in the mafia.')
-        .expectWhisper('galacticRaven', 'You are a sheeple.')
-        .expectWhisper('ian025', 'You are a sheeple.')
-        .expectWhisper('ogtega', 'You are a sheeple.');
+        .expectWhisper('alex', 'Hey! Your role is Mafia.')
+        .expectWhisper('jon', 'Hey! Your role is Mafia.')
+        .expectWhisper('galacticRaven', 'Hey! Your role is Sheeple.')
+        .expectWhisper('ian025', 'Hey! Your role is Sheeple.')
+        .expectWhisper('ogtega', 'Hey! Your role is Sheeple.');
 });
 
-// TODO: Assign roles after game start
-// TODO: Everyone gets whispered with their role after game start
-// TODO: Dead people can't vote or get whispered if they're mafia
+it('dead people cannot vote', () => {
+    let gameSetup = new GameTestHelper();
+    gameSetup = gameSetup
+        .startWithPlayers()
+        .vote('alex', 'jon')
+        .vote('galacticRaven', 'alex')
+        .vote('ian025', 'alex')
+        .vote('ogtega', 'alex')
+        .vote('jon', 'alex');
+
+    gameSetup
+        // alex should die here
+        .vote('alex', 'jon');
+
+        // assert that alex's vote didn't count
+        let voteTally = gameSetup.game.voteTally();
+        expect(voteTally['jon']).toBeUndefined();
+});
+
+it('people not in the game cannot vote', () => {
+    let gameSetup = new GameTestHelper();
+    gameSetup = gameSetup
+        .startWithPlayers()
+        .vote('alex', 'jon')
+        .vote('galacticRaven', 'alex')
+        .vote('ian025', 'alex')
+        .vote('ogtega', 'alex')
+        .vote('jon', 'alex');
+
+    gameSetup
+        // alex should die here
+        .vote('ensYde', 'jon');
+
+        // assert that ensYde's vote didn't count
+        let voteTally = gameSetup.game.voteTally();
+        expect(voteTally['jon']).toBeUndefined();
+});
+
+it('mafia cannot kill dead people', () => {
+    let gameSetup = new GameTestHelper();
+    gameSetup = gameSetup
+        .startWithPlayers()
+        .vote('alex', 'jon')
+        .vote('galacticRaven', 'alex')
+        .vote('ian025', 'alex')
+        .vote('ogtega', 'alex')
+        .vote('jon', 'alex');
+
+    // alex is dead because he was voted off above
+
+    // alex is dead, jon (mafia) shouldn't be able to kill him
+    gameSetup
+        .kill('jon', 'alex')
+        .expectWhisper('jon', 'You cannot kill dead people.');
+});
+
+it('mafia cannot kill people people who arent even playing', () => {
+    let gameSetup = new GameTestHelper();
+    gameSetup = gameSetup
+        .startWithPlayers()
+        .vote('alex', 'jon')
+        .vote('galacticRaven', 'alex')
+        .vote('ian025', 'alex')
+        .vote('ogtega', 'alex')
+        .vote('jon', 'alex');
+
+    // alex is dead because he was voted off above
+
+    // alex is dead, jon (mafia) shouldn't be able to kill him
+    gameSetup
+        .kill('jon', 'subconix')
+        .expectWhisper('jon', 'That person is not playing!');
+});
+
+it('dead mafia dont get whispered', () => {
+    let gameSetup = new GameTestHelper();
+    gameSetup = gameSetup
+        .startWithPlayers()
+        .vote('alex', 'jon')
+        .vote('galacticRaven', 'alex')
+        .vote('ian025', 'alex')
+        .vote('ogtega', 'alex')
+        .vote('jon', 'alex');
+
+    // alex is dead because he was voted off above
+
+    // alex is dead, jon (mafia) shouldn't be able to kill him
+    gameSetup
+        .expectNotWhisper('alex', 'Time to kill. Use !kill <username> to kill someone, you evil mafia person you.');
+});
+
+it('becomes nighttime when voting ends', () => {
+    let gameSetup = new GameTestHelper();
+    gameSetup = gameSetup
+        .startWithPlayers()
+        .vote('alex', 'jon')
+        .vote('galacticRaven', 'alex')
+        .vote('ian025', 'alex')
+        .vote('ogtega', 'alex')
+        .vote('jon', 'alex');
+
+    // alex is dead because he was voted off above
+
+    gameSetup
+        .expectChat('Night time has started.');
+});
+
+it('mafia get whispered', () => {
+    let gameSetup = new GameTestHelper();
+    gameSetup = gameSetup
+        .startWithPlayers()
+        .vote('alex', 'jon')
+        .vote('galacticRaven', 'alex')
+        .vote('ian025', 'alex')
+        .vote('ogtega', 'alex')
+        .vote('jon', 'alex');
+
+    // alex is dead because he was voted off above
+
+    gameSetup
+        .expectWhisper('jon', 'Time to kill. Use !kill <username> to kill someone, you evil mafia person you.');
+});
+
+it('when all mafia are dead, sheeple win', () => {
+    let gameSetup = new GameTestHelper();
+    gameSetup = gameSetup
+        .startWithPlayers()
+        .vote('alex', 'jon')
+        .vote('galacticRaven', 'alex')
+        .vote('ian025', 'alex')
+        .vote('ogtega', 'alex')
+        .vote('jon', 'alex')
+        // alex is dead because he was voted off above
+        .kill('jon', 'galacticRaven')
+        .vote('ian025', 'jon')
+        .vote('ogtega', 'jon')
+        .vote('jon', 'ogtega');
+        // jon dies, last remaining mafioso
+
+    gameSetup
+        .expectChat('Sheeple win!');
+});
+
+// TUESDAY:
+
+// TODO: The other win condition
+// TODO: If all sheeple are dead, mafia win
 // TODO: Can't vote while in night time
 // TODO: Can't join after game is started
-// TODO: If all mafia are dead, sheeple win
-// TODO: If all sheeple are dead, mafia win
 
 it('somebody dies after time expires');
