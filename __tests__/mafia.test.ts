@@ -1,8 +1,6 @@
-import { Game, GameState, ChatEvent, WhisperEvent, TimeEvent } from '../mafia';
+import { Game, GameState, ChatEvent, WhisperEvent, TimeEvent, lookingForPlayersWindow } from '../mafia';
 import PlayerStateManager, { PlayerRole } from "../playerstatemanager";
 
-// TODO: move to nighttime 
-// and let the killers know they should vote to kill
 // TODO: rate limiting queue
 
 class FakeChatClient {
@@ -54,7 +52,7 @@ class GameTestHelper {
     }
 
     startGame() : GameTestHelper {
-        this.game.react(new TimeEvent(10000));
+        this.game.react(new TimeEvent(lookingForPlayersWindow));
         return this;
     }
 
@@ -85,6 +83,11 @@ class GameTestHelper {
 
     expectChat(expected: string) : GameTestHelper {
         expect(this.chatClient.buffer[this.game.channel]).toContain(expected);
+        return this;
+    }
+
+    expectNotChat(notExpected: string) : GameTestHelper {
+        expect(this.chatClient.buffer[this.game.channel]).not.toContain(notExpected);
         return this;
     }
 }
@@ -314,11 +317,52 @@ it('when all mafia are dead, sheeple win', () => {
         .expectChat('Sheeple win!');
 });
 
-// TUESDAY:
+it('if all sheeple are dead, mafia win', () => {
+    let gameSetup = new GameTestHelper();
+    gameSetup = gameSetup
+        .startWithPlayers()
+        .vote('alex', 'galacticRaven')
+        .vote('galacticRaven', 'alex')
+        .vote('ian025', 'galacticRaven')
+        .vote('ogtega', 'galacticRaven')
+        .vote('jon', 'galacticRaven')
+        // galacticRaven is dead because he was voted off above
+        .kill('jon', 'ian025')
+        // ian025 is dead
+        .vote('alex', 'ogtega')
+        .vote('ogtega', 'jon')
+        .vote('jon', 'ogtega');
+        // ogtega dies, no more sheeple
 
-// TODO: The other win condition
-// TODO: If all sheeple are dead, mafia win
+    gameSetup
+        .expectChat('Mafiosos win!');
+});
+
 // TODO: Can't vote while in night time
-// TODO: Can't join after game is started
+it('can\'t while in night time', () => {
+    let gameSetup = new GameTestHelper();
+    gameSetup = gameSetup
+        .startWithPlayers()
+        .vote('alex', 'galacticRaven')
+        .vote('galacticRaven', 'alex')
+        .vote('ian025', 'galacticRaven')
+        .vote('ogtega', 'galacticRaven')
+        .vote('jon', 'galacticRaven')
+        .vote('alex', 'ian025');
+        // galacticRaven is dead because he was voted off above
+        // We are now in nighttime so user votes aren't counted 
+        // or responded to
 
-it('somebody dies after time expires');
+    // assert that alex's last vote didn't count
+    let voteTally = gameSetup.game.voteTally();
+    expect(voteTally).toMatchObject({});
+});
+
+it('can\'t join after the game is started', () => {
+    let gameSetup = new GameTestHelper();
+    gameSetup = gameSetup
+        .startWithPlayers()
+        .joinPlayers(['herrow12']);
+
+    expect(gameSetup.playerStateManager.getPlayers().length).toBe(5);
+});

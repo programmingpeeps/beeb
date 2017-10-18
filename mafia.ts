@@ -11,7 +11,7 @@ export const enum GameState {
     LawAndOrder
 }
 
-export const lookingForPlayersWindow = 10000; // in milliseconds
+export const lookingForPlayersWindow = 40000; // in milliseconds
 const minPlayers = 5;
 
 class Event { }
@@ -138,6 +138,8 @@ export class Game {
                 this.handleVote(username, votingFor);
                 break;
             case "!join":
+                if (this.state != GameState.LookingForPlayers) return;
+
                 if (!this.playerStateManager.hasPlayer(username)) {
                     this.playerStateManager.join(username);
                 }
@@ -166,10 +168,18 @@ export class Game {
         }
 
         this.playerStateManager.kill(killeeUsername);
+
+        if (this.didMafiososWin()) {
+            this.chatClient.say(this.channel, "Mafiosos win!");
+            return;
+        }
+
         this.transition(GameState.DayTime);
     }
 
     handleVote(username, votingFor) {
+        if (this.state != GameState.DayTime) return; 
+
         if (username == votingFor) {
             this.chatClient.say(this.channel, "You can't vote for yourself!")
             return;
@@ -255,12 +265,22 @@ export class Game {
             return;
         }
 
+        if (this.didMafiososWin()) {
+            this.chatClient.say(this.channel, "Mafiosos win!");
+            return;
+        }
+
         this.transition(GameState.NightTime);
     }
 
     didSheepleWin() {
         const mafiosos = this.playerStateManager.getMafiosos();
         return mafiosos.filter(m => m.alive).length == 0;
+    }
+
+    didMafiososWin() {
+        const sheeple = this.playerStateManager.getSheeple();
+        return sheeple.filter(m => m.alive).length == 0;
     }
 
     transition(state: GameState) {

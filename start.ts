@@ -1,6 +1,7 @@
 var tmi = require("tmi.js");
 var storage = require('node-persist');
-var mafia = require('./mafia');
+import { Game, ChatEvent, TimeEvent, WhisperEvent } from './mafia';
+import * as Collections from 'typescript-collections';
 
 var options = {
     options: {
@@ -14,6 +15,53 @@ var options = {
         password: process.env.BEEB_TWITCH_OAUTH
     },
     channels: ["#programmingpeople"]
+};
+
+export class DelayedChatEvent {
+    action: string;
+    to: string;
+    message: string;
+
+    constructor(action: string, to: string, message: string) {
+        this.action = action;
+        this.to = to;
+        this.message = message;
+    }
+}
+
+export class DelayedChatClient {
+    // We need to have a queue for sending and whispering messages
+    // so that we don't blow everything up 
+    queue: Collections.Queue<DelayedChatEvent>;
+    client: any;
+
+    constructor(chatClient: any) {
+        this.client = chatClient;
+        this.queue = new Collections.Queue<DelayedChatEvent>();
+        setInterval(() => {
+            if (!this.queue.isEmpty()) {
+                console.log(this.queue);
+                const event = this.queue.dequeue();
+                if (event.action == 'whisper') {
+                    console.log(`whispering ${event.to}`);
+                    this.client.whisper(event.to, event.message);
+                } else {
+                    console.log('saying');
+                    this.client.say(event.to, event.message);
+                }
+            }
+        }, 3000);
+    }
+
+    whisper(username: string, message: string) {
+        console.log(`getting whisper command to ${username} ${message}`);
+        this.queue.enqueue(new DelayedChatEvent('whisper', username, message));
+    }
+
+    say(channel: string, message: string) {
+        console.log(`getting say command ${message} to ${channel}`);
+        this.queue.enqueue(new DelayedChatEvent('say', channel, message));
+    }
 };
 
 var client = new tmi.client(options);
@@ -58,43 +106,56 @@ storage.init().then(function () {
     const storedVoted: string[] = storage.getItemSync('voted');
     if (storedVotes) votes = storedVotes;
     if (storedVoted) voted = storedVoted;
+
+    client.on("whisper", function (from, userstate, message, self) {
+        if (self) return;
+    
+        if (message.startsWith("!")) {
+            if (game) {
+                game.react(new WhisperEvent(from, message));
+            }
+        }
+    });
     
     client.on("message", function (channel, userstate, message, self) {
         if (self) return;
 
-        if (message.startsWith("!vote"))
-            return handleVote(message, userstate);
-
         if (message.startsWith("!choices"))
             return runAndTellThat("1: mafia chat bot, 2: Paintball Buy/Sell/Trade, 3: Bitcoin miner");
 
-        if (message.startsWith("!roll"))
+        if (message.startsWith("!test")) {
+            client.whisper(userstate.username, 'test').catch((err) => console.log(err));
+            return;
+        }
+
+        if (message.startsWith("!roll")) {
             client.say("#programmingpeople", `You rolled a ${getYourFate()}!`);
+            return;
+        }
 
         if (message.startsWith("!start")) {
             if (game) {
               runAndTellThat(`Sorry ${userstate.username}, we already have a game going! Type !join to join.`)
             } else {
-              game = new mafia.Game(userstate.username, client, channel);
+              game = new Game(userstate.username, new DelayedChatClient(client), channel);
+              let totalTime = 0;
+              // bmallred is a baller let's get it
+              setInterval(() => {
+                  totalTime += 10000;
+                  game.react(new TimeEvent(totalTime));
+              }, 10000);
             }
+            return;
         }
 
-        if (message.startsWith("!join")) {
+        if (message.startsWith("!")) {
             if (game) {
-              game.userJoined(userstate.username);
-            } else {
-              runAndTellThat(`Sorry ${userstate.username}, there's no game going yet. Type !start to start one.`)
+                game.react(new ChatEvent(userstate.username, message));
             }
+            return;
         }
-
-        if (message.startsWith("!end")) {
-            if (game.initiator == userstate.username) {
-                game = null;
-                runAndTellThat("The game is over!");
-            }
-        }
-            
     });
+
 })
 
 function handleVote(message, userstate) {
