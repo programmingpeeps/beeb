@@ -4,7 +4,10 @@
   "description": "",
   "main": "start.js",
   "dependencies": {
+    "discord.js": "^11.2.1",
     "node-persist": "^2.1.0",
+    "phoenix-channels": "^1.0.0",
+    "phoenix-socket": "^1.2.3",
     "tmi.js": "^1.2.1"
   },
   "devDependencies": {
@@ -15,7 +18,8 @@
     "ts-jest": "^21.0.1",
     "ts-node": "^3.3.0",
     "typescript": "^2.5.3",
-    "typescript-collections": "^1.2.5"
+    "typescript-collections": "^1.2.5",
+    "ws": "^3.3.2"
   },
   "scripts": {
     "test": "jest",

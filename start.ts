@@ -2,6 +2,9 @@ var tmi = require("tmi.js");
 var storage = require('node-persist');
 import { Game, ChatEvent, TimeEvent, WhisperEvent } from './mafia';
 import * as Collections from 'typescript-collections';
+const token = process.env.BEEB_DISCORD_TOKEN;
+
+client.on('ready', () => console.log('connected to discord') );
 
 var options = {
     options: {
