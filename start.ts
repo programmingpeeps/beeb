@@ -2,9 +2,8 @@ var tmi = require("tmi.js");
 var storage = require('node-persist');
 import { Game, ChatEvent, TimeEvent, WhisperEvent } from './mafia';
 import * as Collections from 'typescript-collections';
+import PhoenixClient from './whatever.js';
 const token = process.env.BEEB_DISCORD_TOKEN;
-
-client.on('ready', () => console.log('connected to discord') );
 
 var options = {
     options: {
@@ -67,7 +66,7 @@ export class DelayedChatClient {
     }
 };
 
-var client = new tmi.client(options);
+var client = new PhoenixClient("", "");
 
 // Connect the client to the server..
 client.connect();
@@ -110,8 +109,12 @@ storage.init().then(function () {
     if (storedVotes) votes = storedVotes;
     if (storedVoted) voted = storedVoted;
 
+    // We don't currently support whispering the bot,
+    // not sure if we really need it anyway
     client.on("whisper", function (from, userstate, message, self) {
         if (self) return;
+
+        console.log(`${from} ${userstate} ${message}`)
     
         if (message.startsWith("!")) {
             if (game) {
@@ -127,7 +130,7 @@ storage.init().then(function () {
             return runAndTellThat("1: mafia chat bot, 2: Paintball Buy/Sell/Trade, 3: Bitcoin miner");
 
         if (message.startsWith("!test")) {
-            client.whisper(userstate.username, 'test').catch((err) => console.log(err));
+            //client.whisper(userstate.username, 'test').catch((err) => console.log(err));
             return;
         }
 
