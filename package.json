@@ -8,7 +8,8 @@
     "node-persist": "^2.1.0",
     "phoenix-channels": "^1.0.0",
     "phoenix-socket": "^1.2.3",
-    "tmi.js": "^1.2.1"
+    "tmi.js": "^1.2.1",
+    "typed-event-emitter": "^1.0.3"
   },
   "devDependencies": {
     "@types/jest": "^21.1.2",
