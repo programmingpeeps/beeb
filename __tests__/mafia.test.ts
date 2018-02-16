@@ -230,6 +230,25 @@ it('mafia cannot kill dead people', () => {
         .expectWhisper('jon', 'You cannot kill dead people.');
 });
 
+it('first mafia kill wins', () => {
+    let gameSetup = new GameTestHelper();
+    gameSetup = gameSetup
+        .startWithPlayers()
+        .vote('alex', 'jon')
+        .vote('galacticRaven', 'alex')
+        .vote('ian025', 'alex')
+        .vote('ogtega', 'alex')
+        .vote('jon', 'alex');
+
+    // alex is dead because he was voted off above
+
+    // alex is dead, jon (mafia) shouldn't be able to kill him
+    gameSetup
+        .kill('jon', 'ian025')
+        .expectChat('ian025 has been killed by the Mafiosos dead.');
+});
+
+
 it('mafia cannot kill people people who arent even playing', () => {
     let gameSetup = new GameTestHelper();
     gameSetup = gameSetup

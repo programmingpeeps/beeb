@@ -143,7 +143,7 @@ storage.init().then(function () {
             if (game) {
               runAndTellThat(`Sorry ${userstate.username}, we already have a game going! Type !join to join.`)
             } else {
-              game = new Game(userstate.username, new DelayedChatClient(client), channel);
+              game = new Game(userstate.username, client, channel);
               let totalTime = 0;
               // bmallred is a baller let's get it
               setInterval(() => {

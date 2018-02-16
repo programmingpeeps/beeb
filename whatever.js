@@ -5,7 +5,7 @@ const { Socket } = require("phoenix-channels");
 class PhoenixClient extends EventEmitter {
   constructor(endpoint, room) {
     super();
-    let socket = new Socket("ws://localhost:4000/socket", {
+    let socket = new Socket("wss://mafia-elixir.herokuapp.com/socket", {
       params: { user: "bot" }
     });
     socket.connect();
